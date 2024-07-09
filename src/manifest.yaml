@@ -1,0 +1,97 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: k8s-scaler
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: default
+  name: k8s-scaler-role
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: k8s-scaler-rolebinding
+  namespace: default
+subjects:
+  - kind: ServiceAccount
+    name: k8s-scaler
+    namespace: default
+roleRef:
+  kind: Role
+  name: k8s-scaler-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: k8s-scaler
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: k8s-scaler
+  template:
+    metadata:
+      labels:
+        app: k8s-scaler
+    spec:
+      serviceAccountName: k8s-scaler
+      containers:
+        - name: k8s-scaler
+          image: your-username/k8s-scaler:latest
+          ports:
+            - containerPort: 8000
+          env:
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: "localhost:9092"
+            - name: KAFKA_TOPIC
+              value: "my_topic"
+            - name: NAMESPACE
+              value: "default"
+            - name: DEPLOYMENT_NAME
+              value: "my-deployment"
+            - name: SCALE_FACTOR
+              value: "10"
+            - name: MIN_PODS
+              value: "1"
+            - name: MAX_PODS
+              value: "10"
+            - name: HEALTH_CHECK_PORT
+              value: "8000"
+            - name: MIN_TTL
+              value: "300"
+            - name: SCALE_INTERVAL
+              value: "60"
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: k8s-scaler
+  namespace: default
+spec:
+  selector:
+    app: k8s-scaler
+  ports:
+    - protocol: TCP
+      port: 8000
+      targetPort: 8000
